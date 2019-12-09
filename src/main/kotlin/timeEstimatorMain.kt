@@ -1,35 +1,64 @@
 package marzano.giovani.timeestimator
 
 import org.jgrapht.graph.DefaultEdge
+import org.jgrapht.graph.SimpleDirectedGraph
 import org.jgrapht.io.*
+import java.io.File
+import java.lang.NumberFormatException
 import kotlin.Exception
 
+// Program params
+const val INPUT_GRAPHML = "./input.graphml"
+
 fun main(args: Array<String>) {
-    println("Hello world")
+    val graphMlImporter =  createGraphMLImporter()
+    val graph = SimpleDirectedGraph<BaseVertex, DefaultEdge>(DefaultEdge::class.java)
+
+    val inStream = File(INPUT_GRAPHML).inputStream()
+    graphMlImporter.importGraph(graph, inStream)
+    inStream.close()
 }
 
 fun createGraphMLImporter(): GraphImporter<BaseVertex, DefaultEdge> {
-    val vertexProvider = VertexProvider<BaseVertex> {
-        id: String, attributes: Map<String, Attribute> ->
-        BaseVertex(id)
-    }
+    val vertexProviderFun = VertexProvider<BaseVertex>(::vertexProvider)
+    val edgeProviderFun = EdgeProvider<BaseVertex, DefaultEdge>(::edgeProvider)
 
-    val edgeProvider = EdgeProvider<BaseVertex, DefaultEdge> {
-        from: BaseVertex , to: BaseVertex, label: String, attributes: Map<String, Attribute> ->
-        DefaultEdge()
-    }
+    val importer = GraphMLImporter(vertexProviderFun, edgeProviderFun)
+    importer.isSchemaValidation = false;
 
-    return GraphMLImporter(vertexProvider, edgeProvider);
+    return importer
 }
 
 fun vertexProvider(id: String, attributes: Map<String, Attribute>): BaseVertex {
     return when (extractVertexType(id, attributes)) {
         VertexTypes.GOAL -> GoalVertex(id)
         VertexTypes.MARK -> MarkVertex(id)
-        VertexTypes.TASK -> TODO()
+        VertexTypes.TASK -> taskVertexProvider(id, attributes)
         VertexTypes.STAFF -> StaffVertex(id)
         VertexTypes.WORKER -> TODO()
     }
+}
+
+fun taskVertexProvider(id: String, attributes: Map<String, Attribute>): TaskVertex {
+    val taskId = attributes["taskId"]?.value ?: ""
+    val name = attributes["name"]?.value ?: ""
+    val pointsStr = attributes["points"]?.value ?: "1.0"
+    val points = try { pointsStr.toDouble() } catch(e: NumberFormatException) {
+        throw Exception("Vertex $id: invalid points value '$pointsStr'", e)
+    }
+    return TaskVertex(id, taskId, name, points)
+}
+
+fun workerVertexProvider(id: String, attributes: Map<String, Attribute>): WorkerVertex {
+    val dedicationStr = attributes["dedication"]?.value ?: "1.0"
+    val dedication = try { dedicationStr.toDouble() } catch (e: NumberFormatException) {
+        throw Exception("Vertex $id: invalid dedication value '$dedicationStr'")
+    }
+    if (dedication !in 0.0..1.0) {
+        throw Exception("Vertex $id: dedication must be in range [0.0..1.0]")
+    }
+
+    return WorkerVertex(id, dedication)
 }
 
 private fun extractVertexType(
@@ -43,6 +72,8 @@ private fun extractVertexType(
         throw Exception("Vertex $id has invalid type '$typeStr'", ex)
     }
 }
+
+fun edgeProvider(from: BaseVertex , to: BaseVertex, label: String, attributes: Map<String, Attribute>) = DefaultEdge()
 
 enum class VertexTypes {
     GOAL, MARK, TASK, STAFF, WORKER
