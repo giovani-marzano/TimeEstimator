@@ -69,4 +69,13 @@ private fun extractVertexType(
     }
 }
 
+private fun extractTaskStatus(id: String, attributes: Map<String, Attribute>): TaskStatus {
+    val statusStr = attributes["status"]?.value?.toUpperCase() ?: "NONE"
+    return try {
+        TaskStatus.valueOf(statusStr)
+    } catch (ex: java.lang.IllegalArgumentException) {
+        throw Exception("Vertex $id has invalid status '$statusStr'", ex)
+    }
+}
+
 fun edgeProvider(from: BaseVertex, to: BaseVertex, label: String, attributes: Map<String, Attribute>) = DefaultEdge()
