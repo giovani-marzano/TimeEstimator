@@ -26,7 +26,8 @@ import kotlin.random.Random
 const val INPUT_GRAPHML = "./input.graphml"
 const val INPUT_DISTRIBUTION = "./taskDistribution.txt"
 const val NUM_SIMULATIONS = 100
-const val OUTPUT_FILE = "./output.txt"
+const val OUTPUT_FINISH_TIMES = "./finishTimes.txt"
+const val OUTPUT_PRIORITIES = "./priorities.txt"
 
 fun main(args: Array<String>) {
     val graphMlImporter = createGraphMLImporter()
@@ -41,6 +42,13 @@ fun main(args: Array<String>) {
     val distribution = importDistribution(INPUT_DISTRIBUTION)
     val random = Random.Default
 
+    File(OUTPUT_PRIORITIES).writer().use { writer ->
+        TopologicalOrderIterator(tasksGraph, taskPriorityComparator)
+            .forEach { task ->
+                writer.write("$task\n")
+            }
+    }
+
     val workSimulator = WorkSimulator(
         taskDependencyGraph = tasksGraph,
         workerSet = workerSet,
@@ -48,28 +56,26 @@ fun main(args: Array<String>) {
         taskTimeDistribution = distribution
     )
 
-    val writer = File(OUTPUT_FILE).writer()
-
     val marks = tasksGraph.vertexSet().asSequence()
         .map { it as? MarkVertex }
         .filterNotNull()
         .sortedBy { it.priority }
         .toList()
 
-    writer.write(marks.joinToString(separator = ";") { "$it" })
-    writer.write("\n")
-
-    val begin = Instant.now()
-    println("Beginig $NUM_SIMULATIONS simulations...")
-    for (i in 1..NUM_SIMULATIONS) {
-        workSimulator.simulateWork()
-        writer.write(marks.joinToString(separator = ";") { "${workSimulator.finishTimes[it]}" })
+    File(OUTPUT_FINISH_TIMES).writer().use { writer ->
+        writer.write(marks.joinToString(separator = ";") { "$it" })
         writer.write("\n")
-        println("Simulation $i of $NUM_SIMULATIONS - ${Duration.between(begin, Instant.now())}")
-    }
-    println("...done ${Duration.between(begin, Instant.now())}")
 
-    writer.close()
+        val begin = Instant.now()
+        println("Beginig $NUM_SIMULATIONS simulations...")
+        for (i in 1..NUM_SIMULATIONS) {
+            workSimulator.simulateWork()
+            writer.write(marks.joinToString(separator = ";") { "${workSimulator.finishTimes[it]}" })
+            writer.write("\n")
+            println("Simulation $i of $NUM_SIMULATIONS - ${Duration.between(begin, Instant.now())}")
+        }
+        println("...done ${Duration.between(begin, Instant.now())}")
+    }
 }
 
 fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseVertex, DefaultEdge> {

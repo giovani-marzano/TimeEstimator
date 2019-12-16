@@ -2,9 +2,14 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.3.41"
+    application
 }
 
-group = "marzano.giovani"
+application {
+    mainClassName = "timeestimator.MainKt"
+}
+
+group = "time-estimator"
 version = "1.0-SNAPSHOT"
 
 repositories {

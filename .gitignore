@@ -2,3 +2,5 @@
 build/*
 .gradle/*
 .idea/*
+priorities.txt
+finishTimes.txt
