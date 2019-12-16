@@ -48,13 +48,28 @@ fun main(args: Array<String>) {
         taskTimeDistribution = distribution
     )
 
+    val writer = File(OUTPUT_FILE).writer()
+
+    val marks = tasksGraph.vertexSet().asSequence()
+        .map { it as? MarkVertex }
+        .filterNotNull()
+        .sortedBy { it.priority }
+        .toList()
+
+    writer.write(marks.joinToString(separator = ";") { "$it" })
+    writer.write("\n")
+
     val begin = Instant.now()
     println("Beginig $NUM_SIMULATIONS simulations...")
     for (i in 1..NUM_SIMULATIONS) {
         workSimulator.simulateWork()
+        writer.write(marks.joinToString(separator = ";") { "${workSimulator.finishTimes[it]}" })
+        writer.write("\n")
         println("Simulation $i of $NUM_SIMULATIONS - ${Duration.between(begin, Instant.now())}")
     }
     println("...done ${Duration.between(begin, Instant.now())}")
+
+    writer.close()
 }
 
 fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseVertex, DefaultEdge> {
