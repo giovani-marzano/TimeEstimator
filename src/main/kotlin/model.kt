@@ -62,8 +62,4 @@ class TaskVertex(
 
 class WorkerVertex(id: String, val dedication: Double = 1.0) : BaseVertex(id, VertexTypes.WORKER)
 
-val taskPriorityComparator = Comparator<BaseVertex> { t1, t2 ->
-    val p1 = (t1 as? BaseTaskVertex)?.let { it.priority } ?: 0
-    val p2 = (t2 as? BaseTaskVertex)?.let { it.priority } ?: 0
-    p1 - p2
-}
+val taskPriorityComparator = Comparator.comparing<BaseTaskVertex, Int> { it.priority }

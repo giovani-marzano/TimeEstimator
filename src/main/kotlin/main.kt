@@ -78,48 +78,43 @@ fun main(args: Array<String>) {
     }
 }
 
-fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseVertex, DefaultEdge> {
+fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseTaskVertex, DefaultEdge> {
 
-    val goalVertices = graph.vertexSet().asSequence()
+    val finalGoalVertices = graph.vertexSet().asSequence()
         .filter { it.type == VertexTypes.GOAL }
+        .filter { graph.outDegreeOf(it) == 0 }
         .toSet()
 
-    val subGraph = SimpleDirectedGraph<BaseVertex, DefaultEdge>(DefaultEdge::class.java)
+    val subGraph = SimpleDirectedGraph<BaseTaskVertex, DefaultEdge>(DefaultEdge::class.java)
 
-    val addVertexToSubGraph = fun(vertex: BaseVertex) {
+    val addVertexToSubGraph = fun(vertex: BaseTaskVertex) {
         subGraph.addVertex(vertex)
         graph.incomingEdgesOf(vertex).forEach { edge ->
             val source = graph.getEdgeSource(edge)
-            subGraph.addVertex(source)
-            subGraph.addEdge(source, vertex, edge)
+            if (source is BaseTaskVertex) {
+                subGraph.addVertex(source)
+                subGraph.addEdge(source, vertex, edge)
+            }
         }
     }
 
-    val allowedTypes = setOf(VertexTypes.GOAL, VertexTypes.MARK, VertexTypes.TASK)
-
     val reversedGraph = EdgeReversedGraph(graph)
-    val depthFirstIterator = DepthFirstIterator(reversedGraph, goalVertices)
+    val depthFirstIterator = DepthFirstIterator(reversedGraph, finalGoalVertices)
 
     depthFirstIterator.addTraversalListener(TaskPriorityTraversalListener(reversedGraph))
 
     depthFirstIterator.asSequence()
-        .filter { allowedTypes.contains(it.type) }
+        .map { it as? BaseTaskVertex }
+        .filterNotNull()
         .forEach { addVertexToSubGraph(it) }
-
-    graph.vertexSet().asSequence()
-        .filter { it.type == VertexTypes.MARK }
-        .filterNot { subGraph.containsVertex(it) }
-        .filter { mark ->
-            graph.incomingEdgesOf(mark).asSequence()
-                .map { graph.getEdgeSource(it) }
-                .all { subGraph.containsVertex(it) }
-        }.forEach { addVertexToSubGraph(it) }
 
     return subGraph
 }
 
-class TaskPriorityTraversalListener(val graph: Graph<BaseVertex, DefaultEdge>, val markPriorityDelta: Int = 100) :
-    TraversalListener<BaseVertex, DefaultEdge> {
+class TaskPriorityTraversalListener(
+    private val graph: Graph<BaseVertex, DefaultEdge>,
+    private val goalPriorityDelta: Int = 100
+) : TraversalListener<BaseVertex, DefaultEdge> {
     private var priority = 0
 
     override fun connectedComponentStarted(e: ConnectedComponentTraversalEvent?) {
@@ -132,16 +127,15 @@ class TaskPriorityTraversalListener(val graph: Graph<BaseVertex, DefaultEdge>, v
     override fun vertexTraversed(e: VertexTraversalEvent<BaseVertex>?) {
         val vertex = e?.vertex ?: return
 
-        if (vertex is MarkVertex) {
-            priority -= markPriorityDelta
-            vertex.priority = priority
+        if (vertex.type == VertexTypes.GOAL) {
+            priority -= goalPriorityDelta
         }
     }
 
     override fun vertexFinished(e: VertexTraversalEvent<BaseVertex>?) {
         val vertex = e?.vertex ?: return
-        if (vertex is MarkVertex) {
-            priority += markPriorityDelta
+        if (vertex.type == VertexTypes.GOAL) {
+            priority += goalPriorityDelta
         }
     }
 
@@ -149,7 +143,7 @@ class TaskPriorityTraversalListener(val graph: Graph<BaseVertex, DefaultEdge>, v
         val edge = e?.edge ?: return
         val vertex = graph.getEdgeTarget(edge)
 
-        if (vertex is TaskVertex) {
+        if (vertex is BaseTaskVertex) {
             val newPriority = priority - graph.inDegreeOf(vertex)
             vertex.priority = min(vertex.priority, newPriority)
         }
@@ -183,23 +177,23 @@ fun extractWorkers(graph: Graph<BaseVertex, DefaultEdge>): Set<WorkerVertex> {
         .toSet()
 }
 
-data class Work(val worker: WorkerVertex, val finishTime: Double, val task: TaskVertex? = null);
+data class Work(val worker: WorkerVertex, val finishTime: Double, val task: TaskVertex? = null)
 
-val finishTimeComparator = Comparator.comparing<Work, Double> { it.finishTime }
+val finishTimeComparator: Comparator<Work> = Comparator.comparing<Work, Double> { it.finishTime }
 
 class WorkSimulator(
-    val taskDependencyGraph: Graph<BaseVertex, DefaultEdge>,
+    val taskDependencyGraph: Graph<BaseTaskVertex, DefaultEdge>,
     val workerSet: Set<WorkerVertex>,
     val taskTimeDistribution: (Double) -> Double,
     val random: Random = Random.Default
 ) {
-    val finishTimes = mutableMapOf<BaseVertex, Double>()
-    val todoQueue: Queue<TaskVertex> = PriorityQueue(taskPriorityComparator)
-    val workQueue: Queue<Work> = PriorityQueue(finishTimeComparator)
-    val idleQueue: Queue<WorkerVertex> = LinkedList()
-    val statusMap = mutableMapOf<BaseTaskVertex, TaskStatus>()
+    val finishTimes = mutableMapOf<BaseTaskVertex, Double>()
+    private val todoQueue: Queue<TaskVertex> = PriorityQueue(taskPriorityComparator)
+    private val workQueue: Queue<Work> = PriorityQueue(finishTimeComparator)
+    private val idleQueue: Queue<WorkerVertex> = LinkedList()
+    private val statusMap = mutableMapOf<BaseTaskVertex, TaskStatus>()
 
-    var time = 0.0
+    private var time = 0.0
 
     private fun initialize() {
         time = 0.0
@@ -236,7 +230,7 @@ class WorkSimulator(
 
             if (random.nextDouble() < worker.dedication) {
                 task = todoQueue.remove()
-                workTime = task.points * workTime
+                workTime *= task.points
             }
 
             workQueue.add(Work(worker = worker, task = task, finishTime = time + workTime))
@@ -305,10 +299,10 @@ class WorkSimulator(
         }
     }
 
-    private fun taskIsWorkable(task: BaseVertex) =
+    private fun taskIsWorkable(task: BaseTaskVertex) =
         statusMap[task] == TaskStatus.PENDING && taskDependenciesAreDone(task)
 
-    private fun taskDependenciesAreDone(task: BaseVertex): Boolean {
+    private fun taskDependenciesAreDone(task: BaseTaskVertex): Boolean {
         return taskDependencyGraph.inDegreeOf(task) == 0 || taskDependencyGraph.incomingEdgesOf(task).asSequence()
             .map { taskDependencyGraph.getEdgeSource(it) }
             .all { statusMap[it] == TaskStatus.DONE }
