@@ -85,6 +85,13 @@ fun main(args: Array<String>) {
         println("...done ${Duration.between(begin, Instant.now())}")
     }
 
+    writeStatistics(marks.sortedBy { statsMap[it]?.average }, statsMap)
+}
+
+private fun writeStatistics(
+    marks: List<MarkVertex>,
+    statsMap: Map<MarkVertex, MeanVarianceAccumulator>
+) {
     File(OUTPUT_STATS).writer().use { writer ->
         writer.write("stat$OUTPUT_FIELD_SEPARATOR")
         writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { taskHeader(it) })
