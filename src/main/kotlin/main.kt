@@ -30,6 +30,7 @@ const val NUM_SIMULATIONS = 10000
 const val OUTPUT_FINISH_TIMES = "./finishTimes.txt"
 const val OUTPUT_PRIORITIES = "./priorities.txt"
 const val OUTPUT_STATS = "./statistics.txt"
+const val OUTPUT_FIELD_SEPARATOR = "\t"
 
 fun main(args: Array<String>) {
     val graphMlImporter = createGraphMLImporter()
@@ -67,7 +68,7 @@ fun main(args: Array<String>) {
     val statsMap = marks.map { it to MeanVarianceAccumulator() }.toMap()
 
     File(OUTPUT_FINISH_TIMES).writer().use { writer ->
-        writer.write(marks.joinToString(separator = ";") { "$it" })
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { taskHeader(it) })
         writer.write("\n")
 
         val begin = Instant.now()
@@ -77,7 +78,7 @@ fun main(args: Array<String>) {
 
             marks.forEach { statsMap[it]?.addNullableSample(workSimulator.finishTimes[it]) }
 
-            writer.write(marks.joinToString(separator = ";") { "${workSimulator.finishTimes[it]}" })
+            writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${workSimulator.finishTimes[it]}" })
             writer.write("\n")
             println("Simulation $i of $NUM_SIMULATIONS - ${Duration.between(begin, Instant.now())}")
         }
@@ -85,27 +86,29 @@ fun main(args: Array<String>) {
     }
 
     File(OUTPUT_STATS).writer().use { writer ->
-        writer.write("stat;")
-        writer.write(marks.joinToString(separator = ";") { "$it" })
+        writer.write("stat$OUTPUT_FIELD_SEPARATOR")
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { taskHeader(it) })
         writer.write("\n")
 
-        writer.write("num samples;")
-        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.n}" })
+        writer.write("num samples$OUTPUT_FIELD_SEPARATOR")
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.n}" })
         writer.write("\n")
 
-        writer.write("average;")
-        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.average}" })
+        writer.write("average$OUTPUT_FIELD_SEPARATOR")
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.average}" })
         writer.write("\n")
 
-        writer.write("stdev population;")
-        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.stdevPopulation}" })
+        writer.write("stdev population$OUTPUT_FIELD_SEPARATOR")
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.stdevPopulation}" })
         writer.write("\n")
 
-        writer.write("stdev sample;")
-        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.stdevSample}" })
+        writer.write("stdev sample$OUTPUT_FIELD_SEPARATOR")
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.stdevSample}" })
         writer.write("\n")
     }
 }
+
+fun taskHeader(task: BaseTaskVertex) = "${task.id}:${task.taskId}:${task.name}"
 
 class MeanVarianceAccumulator {
     var n: Int = 0
