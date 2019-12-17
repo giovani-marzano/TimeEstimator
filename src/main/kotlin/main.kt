@@ -97,7 +97,7 @@ fun main(args: Array<String>) {
         writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.average}" })
         writer.write("\n")
 
-        writer.write("stdev poputaltion;")
+        writer.write("stdev population;")
         writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.stdevPopulation}" })
         writer.write("\n")
 
