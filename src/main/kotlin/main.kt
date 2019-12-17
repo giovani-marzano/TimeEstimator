@@ -120,7 +120,7 @@ class MeanVarianceAccumulator {
         }
         n++
         accum += (x - shift)
-        accum2 += (x - shift) * (x -shift)
+        accum2 += (x - shift) * (x - shift)
     }
 
     fun addNullableSample(x: Double?) {
@@ -131,10 +131,10 @@ class MeanVarianceAccumulator {
         get() = accum/n + shift
 
     val variancePopulation: Double
-        get() = (accum2 - (accum2 * accum)/n)/n
+        get() = (accum2 - (accum * accum)/n)/n
 
     val varianceSample: Double
-        get() = variancePopulation * (n/(n - 1))
+        get() = variancePopulation * n / (n - 1)
 
     val stdevPopulation get() = sqrt(variancePopulation)
 
