@@ -4,3 +4,4 @@ build/*
 .idea/*
 priorities.txt
 finishTimes.txt
+statistics.txt

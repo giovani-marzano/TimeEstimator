@@ -20,14 +20,16 @@ import kotlin.Comparator
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 // Program params
 const val INPUT_GRAPHML = "./input.graphml"
 const val INPUT_DISTRIBUTION = "./taskDistribution.txt"
-const val NUM_SIMULATIONS = 100
+const val NUM_SIMULATIONS = 10000
 const val OUTPUT_FINISH_TIMES = "./finishTimes.txt"
 const val OUTPUT_PRIORITIES = "./priorities.txt"
+const val OUTPUT_STATS = "./statistics.txt"
 
 fun main(args: Array<String>) {
     val graphMlImporter = createGraphMLImporter()
@@ -62,6 +64,8 @@ fun main(args: Array<String>) {
         .sortedBy { it.priority }
         .toList()
 
+    val statsMap = marks.map { it to MeanVarianceAccumulator() }.toMap()
+
     File(OUTPUT_FINISH_TIMES).writer().use { writer ->
         writer.write(marks.joinToString(separator = ";") { "$it" })
         writer.write("\n")
@@ -70,12 +74,71 @@ fun main(args: Array<String>) {
         println("Beginig $NUM_SIMULATIONS simulations...")
         for (i in 1..NUM_SIMULATIONS) {
             workSimulator.simulateWork()
+
+            marks.forEach { statsMap[it]?.addNullableSample(workSimulator.finishTimes[it]) }
+
             writer.write(marks.joinToString(separator = ";") { "${workSimulator.finishTimes[it]}" })
             writer.write("\n")
             println("Simulation $i of $NUM_SIMULATIONS - ${Duration.between(begin, Instant.now())}")
         }
         println("...done ${Duration.between(begin, Instant.now())}")
     }
+
+    File(OUTPUT_STATS).writer().use { writer ->
+        writer.write("stat;")
+        writer.write(marks.joinToString(separator = ";") { "$it" })
+        writer.write("\n")
+
+        writer.write("num samples;")
+        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.n}" })
+        writer.write("\n")
+
+        writer.write("average;")
+        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.average}" })
+        writer.write("\n")
+
+        writer.write("stdev poputaltion;")
+        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.stdevPopulation}" })
+        writer.write("\n")
+
+        writer.write("stdev sample;")
+        writer.write(marks.joinToString(separator = ";") { "${statsMap[it]?.stdevSample}" })
+        writer.write("\n")
+    }
+}
+
+class MeanVarianceAccumulator {
+    var n: Int = 0
+        private set
+    private var shift = 0.0
+    private var accum = 0.0
+    private var accum2 = 0.0
+
+    fun addSample(x: Double) {
+        if (n == 0) {
+            shift = x
+        }
+        n++
+        accum += (x - shift)
+        accum2 += (x - shift) * (x -shift)
+    }
+
+    fun addNullableSample(x: Double?) {
+        if (x != null) addSample(x)
+    }
+
+    val average: Double
+        get() = accum/n + shift
+
+    val variancePopulation: Double
+        get() = (accum2 - (accum2 * accum)/n)/n
+
+    val varianceSample: Double
+        get() = variancePopulation * (n/(n - 1))
+
+    val stdevPopulation get() = sqrt(variancePopulation)
+
+    val stdevSample get() = sqrt(varianceSample)
 }
 
 fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseTaskVertex, DefaultEdge> {
