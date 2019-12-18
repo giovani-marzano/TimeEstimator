@@ -40,7 +40,8 @@ fun taskVertexProvider(id: String, attributes: Map<String, Attribute>): TaskVert
     } catch (e: NumberFormatException) {
         throw Exception("Vertex $id: invalid points value '$pointsStr'", e)
     }
-    return TaskVertex(id, taskId, name, points)
+    val status = extractTaskStatus(id, attributes)
+    return TaskVertex(id, taskId, name, points, status)
 }
 
 fun workerVertexProvider(id: String, attributes: Map<String, Attribute>): WorkerVertex {
