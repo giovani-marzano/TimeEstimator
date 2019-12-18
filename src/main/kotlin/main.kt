@@ -85,14 +85,23 @@ fun main(args: Array<String>) {
         println("...done ${Duration.between(begin, Instant.now())}")
     }
 
-    writeStatistics(marks.sortedBy { statsMap[it]?.average }, statsMap)
+    writeStatistics(marks.sortedBy { statsMap[it]?.average }, statsMap, workerSet)
 }
 
 private fun writeStatistics(
     marks: List<MarkVertex>,
-    statsMap: Map<MarkVertex, MeanVarianceAccumulator>
+    statsMap: Map<MarkVertex, MeanVarianceAccumulator>,
+    workerSet: Set<WorkerVertex>
 ) {
     File(OUTPUT_STATS).writer().use { writer ->
+
+        fun numberFmt(x: Double?) = "%.2f".format(x)
+
+        writer.write("\n--------------------\n\n")
+
+        writer.write("Workers: " + workerSet.joinToString(separator = ", ") { "${it.dedication}" })
+        writer.write("\n\n")
+
         writer.write("stat$OUTPUT_FIELD_SEPARATOR")
         writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { taskHeader(it) })
         writer.write("\n")
@@ -102,15 +111,22 @@ private fun writeStatistics(
         writer.write("\n")
 
         writer.write("average$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.average}" })
-        writer.write("\n")
-
-        writer.write("stdev population$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.stdevPopulation}" })
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { numberFmt(statsMap[it]?.average) })
         writer.write("\n")
 
         writer.write("stdev sample$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.stdevSample}" })
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { numberFmt(statsMap[it]?.stdevSample) })
+        writer.write("\n")
+
+        writer.write("average 95% conf. interval$OUTPUT_FIELD_SEPARATOR")
+        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { mark ->
+            statsMap[mark]?.let { stats ->
+                val confInterval = stats.stdevSample / sqrt(1.0*stats.n) * 2
+                val minimun = numberFmt(stats.average - confInterval)
+                val maximun = numberFmt(stats.average + confInterval)
+                "$minimun ~ $maximun"
+            } ?: " - "
+        })
         writer.write("\n")
     }
 }
