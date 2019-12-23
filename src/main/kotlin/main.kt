@@ -12,6 +12,7 @@ import org.jgrapht.traverse.DepthFirstIterator
 import org.jgrapht.traverse.TopologicalOrderIterator
 import timeestimator.io.createGraphMLImporter
 import java.io.File
+import java.io.Writer
 import java.lang.NumberFormatException
 import java.time.Duration
 import java.time.Instant
@@ -93,41 +94,45 @@ private fun writeStatistics(
     statsMap: Map<MarkVertex, MeanVarianceAccumulator>,
     workerSet: Set<WorkerVertex>
 ) {
-    File(OUTPUT_STATS).writer().use { writer ->
+    File(OUTPUT_STATS).writer().use { writeStatisticsReport(it, marks, statsMap, workerSet) }
+}
 
-        fun numberFmt(x: Double?) = "%.2f".format(x)
+fun writeStatisticsReport(
+    writer: Writer,
+    marks: List<MarkVertex>,
+    statsMap: Map<MarkVertex, MeanVarianceAccumulator>,
+    workerSet: Set<WorkerVertex>
+): Unit {
 
-        writer.write("\n--------------------\n\n")
+    writer.write("\n##############################################")
+    writer.write("\n# Report ${Instant.now()}")
+    writer.write("\n##############################################\n\n")
 
-        writer.write("Workers: " + workerSet.joinToString(separator = ", ") { "${it.dedication}" })
-        writer.write("\n\n")
 
-        writer.write("stat$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { taskHeader(it) })
-        writer.write("\n")
+    writer.write("Workers: " + workerSet.joinToString(separator = ", ") { "${it.dedication}" })
+    writer.write("\n")
+    writer.write("Num. simulations: ${NUM_SIMULATIONS}\n")
 
-        writer.write("num samples$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { "${statsMap[it]?.n}" })
-        writer.write("\n")
+    marks.forEach { writeMarkStatistics(writer, it, statsMap[it] ) }
+}
 
-        writer.write("average$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { numberFmt(statsMap[it]?.average) })
-        writer.write("\n")
+fun numberFmt(x: Double?) = "%.2f".format(x)
 
-        writer.write("stdev sample$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { numberFmt(statsMap[it]?.stdevSample) })
-        writer.write("\n")
+private fun writeMarkStatistics(writer: Writer, mark: MarkVertex, stats: MeanVarianceAccumulator?) : Unit {
 
-        writer.write("average 95% conf. interval$OUTPUT_FIELD_SEPARATOR")
-        writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { mark ->
-            statsMap[mark]?.let { stats ->
-                val confInterval = stats.stdevSample / sqrt(1.0*stats.n) * 2
-                val minimun = numberFmt(stats.average - confInterval)
-                val maximun = numberFmt(stats.average + confInterval)
-                "$minimun ~ $maximun"
-            } ?: " - "
-        })
-        writer.write("\n")
+    writer.write("\n")
+    writer.write(taskHeader(mark) + "\n")
+
+    if (stats != null) {
+        val confInterval = stats.stdevSample / sqrt(1.0 * stats.n) * 3
+        val minimun = numberFmt(stats.average - confInterval)
+        val maximun = numberFmt(stats.average + confInterval)
+        "$minimun ~ $maximun"
+
+        writer.write("- average (99.7%): ${numberFmt(stats.average)} ($minimun; $maximun)\n")
+        writer.write("- stdev sample: ${numberFmt(stats.stdevSample)}\n")
+    } else {
+        writer.write("- NO STATS !!\n")
     }
 }
 
@@ -154,10 +159,10 @@ class MeanVarianceAccumulator {
     }
 
     val average: Double
-        get() = accum/n + shift
+        get() = accum / n + shift
 
     val variancePopulation: Double
-        get() = (accum2 - (accum * accum)/n)/n
+        get() = (accum2 - (accum * accum) / n) / n
 
     val varianceSample: Double
         get() = variancePopulation * n / (n - 1)
