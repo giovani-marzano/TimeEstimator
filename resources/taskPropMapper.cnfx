@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<styles>
+  <style name="Tasks" scope="node" selectionOnly="false">
+    <mapping>
+      <source name="status" origin="customProperty" type="string"/>
+      <target name="fillColor" type="color">
+        <hints/>
+      </target>
+      <conversion type="discrete">
+        <discrete>
+          <value/>
+          <result>#ffffff</result>
+        </discrete>
+        <discrete>
+          <value>none</value>
+          <result>#ffffff</result>
+        </discrete>
+        <discrete>
+          <value>planning</value>
+          <result>#ccffff</result>
+        </discrete>
+        <discrete>
+          <value>pending</value>
+          <result>#dddddd</result>
+        </discrete>
+        <discrete>
+          <value>doing</value>
+          <result>#ffff99</result>
+        </discrete>
+        <discrete>
+          <value>done</value>
+          <result>#ccffcc</result>
+        </discrete>
+      </conversion>
+    </mapping>
+    <mapping>
+      <source name="type" origin="customProperty" type="string"/>
+      <target name="fillColor" type="color">
+        <hints/>
+      </target>
+      <conversion type="discrete">
+        <discrete>
+          <value>goal</value>
+          <result>#ffcc00</result>
+        </discrete>
+        <discrete>
+          <value>mark</value>
+          <result>#cc99ff</result>
+        </discrete>
+        <discrete>
+          <value>none</value>
+          <result>#ff6600</result>
+        </discrete>
+        <discrete>
+          <value/>
+          <result>#ff6600</result>
+        </discrete>
+        <discrete>
+          <value>staff</value>
+          <result>#3366ff</result>
+        </discrete>
+        <discrete>
+          <value>worker</value>
+          <result>#33cccc</result>
+        </discrete>
+      </conversion>
+    </mapping>
+    <mapping>
+      <source name="dedication" origin="customProperty" type="double"/>
+      <target name="fillColor" type="color">
+        <hints/>
+      </target>
+      <conversion type="range">
+        <range>
+          <min>0.0</min>
+          <max>0.1</max>
+          <result>#ffffff</result>
+        </range>
+        <range>
+          <min>0.1</min>
+          <max>0.8</max>
+          <result>#7fe5ff</result>
+        </range>
+      </conversion>
+    </mapping>
+    <mapping>
+      <source name="name" origin="customProperty" type="string"/>
+      <target name="labelText" type="string">
+        <hints>
+          <hint type="int">0</hint>
+        </hints>
+      </target>
+      <conversion type="asIs"/>
+    </mapping>
+  </style>
+</styles>
