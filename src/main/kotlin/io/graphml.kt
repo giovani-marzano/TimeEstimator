@@ -20,6 +20,7 @@ fun vertexProvider(id: String, attributes: Map<String, Attribute>): BaseVertex {
         VertexTypes.MARK -> markVertexProvider(id, attributes)
         VertexTypes.TASK -> taskVertexProvider(id, attributes)
         VertexTypes.WORKER -> workerVertexProvider(id, attributes)
+        VertexTypes.GOAL -> PrioritizedVertex(id, type)
         else -> BaseVertex(id, type)
     }
 }

@@ -1,14 +1,10 @@
 package timeestimator
 
 import org.jgrapht.Graph
-import org.jgrapht.event.ConnectedComponentTraversalEvent
-import org.jgrapht.event.EdgeTraversalEvent
-import org.jgrapht.event.TraversalListener
-import org.jgrapht.event.VertexTraversalEvent
+import org.jgrapht.event.*
 import org.jgrapht.graph.DefaultEdge
 import org.jgrapht.graph.EdgeReversedGraph
 import org.jgrapht.graph.SimpleDirectedGraph
-import org.jgrapht.traverse.DepthFirstIterator
 import org.jgrapht.traverse.TopologicalOrderIterator
 import timeestimator.io.createGraphMLImporter
 import java.io.File
@@ -19,7 +15,6 @@ import java.time.Instant
 import java.util.*
 import kotlin.Comparator
 import kotlin.math.floor
-import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -193,11 +188,12 @@ fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseTaskV
     }
 
     val reversedGraph = EdgeReversedGraph(graph)
-    val depthFirstIterator = DepthFirstIterator(reversedGraph, finalGoalVertices)
 
-    depthFirstIterator.addTraversalListener(TaskPriorityTraversalListener(reversedGraph))
+    val prioritizeIterator = TopologicalOrderIterator(reversedGraph)
 
-    depthFirstIterator.asSequence()
+    prioritizeIterator.addTraversalListener(TaskPriorityTraversalListener(reversedGraph))
+
+    prioritizeIterator.asSequence()
         .map { it as? BaseTaskVertex }
         .filterNotNull()
         .forEach { addVertexToSubGraph(it) }
@@ -208,38 +204,24 @@ fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseTaskV
 class TaskPriorityTraversalListener(
     private val graph: Graph<BaseVertex, DefaultEdge>,
     private val goalPriorityDelta: Int = 100
-) : TraversalListener<BaseVertex, DefaultEdge> {
-    private var priority = 0
+) : TraversalListenerAdapter<BaseVertex, DefaultEdge>() {
+    override fun vertexFinished(event: VertexTraversalEvent<BaseVertex>?) {
+        val vertex = event?.vertex
 
-    override fun connectedComponentStarted(e: ConnectedComponentTraversalEvent?) {
-        priority = 0
-    }
+        if ( vertex !is PrioritizedVertex ) return
 
-    override fun connectedComponentFinished(e: ConnectedComponentTraversalEvent?) {
-    }
+        val priority = graph.incomingEdgesOf(vertex).asSequence()
+            .map { graph.getEdgeSource(it) }
+            .map { it as? PrioritizedVertex }
+            .filterNotNull()
+            .map { it.priority }
+            .min() ?: 0
 
-    override fun vertexTraversed(e: VertexTraversalEvent<BaseVertex>?) {
-        val vertex = e?.vertex ?: return
+        vertex.priority = priority
 
-        if (vertex.type == VertexTypes.GOAL) {
-            priority -= goalPriorityDelta
-        }
-    }
-
-    override fun vertexFinished(e: VertexTraversalEvent<BaseVertex>?) {
-        val vertex = e?.vertex ?: return
-        if (vertex.type == VertexTypes.GOAL) {
-            priority += goalPriorityDelta
-        }
-    }
-
-    override fun edgeTraversed(e: EdgeTraversalEvent<DefaultEdge>?) {
-        val edge = e?.edge ?: return
-        val vertex = graph.getEdgeTarget(edge)
-
-        if (vertex is BaseTaskVertex) {
-            val newPriority = priority - graph.inDegreeOf(vertex)
-            vertex.priority = min(vertex.priority, newPriority)
+        when (vertex.type) {
+            VertexTypes.GOAL -> vertex.priority -= goalPriorityDelta
+            VertexTypes.TASK -> vertex.priority -= graph.inDegreeOf(vertex)
         }
     }
 }

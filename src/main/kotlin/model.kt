@@ -31,16 +31,22 @@ open class BaseVertex(val id: String, val type: VertexTypes) {
     }
 }
 
+open class PrioritizedVertex(id: String, type: VertexTypes) : BaseVertex(id, type) {
+    var priority: Int = 0
+
+    override fun fieldsString(): String {
+        return "${super.fieldsString()}, priority: $priority"
+    }
+}
+
 open class BaseTaskVertex(
     id: String,
     type: VertexTypes,
     val taskId: String = "",
     val name: String = ""
-) : BaseVertex(id, type) {
-    var priority: Int = 0
-
+) : PrioritizedVertex(id, type) {
     override fun fieldsString(): String {
-        return "${super.fieldsString()}, taskId: $taskId, name: $name, priority: $priority"
+        return "${super.fieldsString()}, taskId: $taskId, name: $name"
     }
 }
 
@@ -53,8 +59,7 @@ class TaskVertex(
     name: String = "",
     val points: Double = 1.0,
     var status: TaskStatus = TaskStatus.PENDING
-) :
-    BaseTaskVertex(id, VertexTypes.TASK, taskId, name) {
+) : BaseTaskVertex(id, VertexTypes.TASK, taskId, name) {
     override fun fieldsString(): String {
         return "${super.fieldsString()}, points: $points, status; $status"
     }
