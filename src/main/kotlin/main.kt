@@ -111,7 +111,7 @@ fun writeStatisticsReport(
     marks.forEach { writeMarkStatistics(writer, it, statsMap[it] ) }
 }
 
-fun numberFmt(x: Double?) = "%.2f".format(x)
+fun numberFmt(x: Double?) = "%.2f".format(Locale.ROOT, x)
 
 private fun writeMarkStatistics(writer: Writer, mark: MarkVertex, stats: MeanVarianceAccumulator?) : Unit {
 
@@ -122,7 +122,6 @@ private fun writeMarkStatistics(writer: Writer, mark: MarkVertex, stats: MeanVar
         val confInterval = stats.stdevSample / sqrt(1.0 * stats.n) * 3
         val minimun = numberFmt(stats.average - confInterval)
         val maximun = numberFmt(stats.average + confInterval)
-        "$minimun ~ $maximun"
 
         writer.write("- average (99.7%): ${numberFmt(stats.average)} ($minimun; $maximun)\n")
         writer.write("- stdev sample: ${numberFmt(stats.stdevSample)}\n")
@@ -169,11 +168,6 @@ class MeanVarianceAccumulator {
 
 fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseTaskVertex, DefaultEdge> {
 
-    val finalGoalVertices = graph.vertexSet().asSequence()
-        .filter { it.type == VertexTypes.GOAL }
-        .filter { graph.outDegreeOf(it) == 0 }
-        .toSet()
-
     val subGraph = SimpleDirectedGraph<BaseTaskVertex, DefaultEdge>(DefaultEdge::class.java)
 
     val addVertexToSubGraph = fun(vertex: BaseTaskVertex) {
@@ -219,10 +213,7 @@ class TaskPriorityTraversalListener(
 
         vertex.priority = priority
 
-        when (vertex.type) {
-            VertexTypes.GOAL -> vertex.priority -= goalPriorityDelta
-            VertexTypes.TASK -> vertex.priority -= graph.inDegreeOf(vertex)
-        }
+        if (vertex.type == VertexTypes.GOAL) vertex.priority -= goalPriorityDelta
     }
 }
 
