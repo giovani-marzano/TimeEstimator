@@ -22,11 +22,12 @@ import kotlin.random.Random
 // Program params
 const val INPUT_GRAPHML = "./input.graphml"
 const val INPUT_DISTRIBUTION = "./taskDistribution.txt"
-const val NUM_SIMULATIONS = 10000
+const val NUM_SIMULATIONS = 16000
 const val OUTPUT_FINISH_TIMES = "./finishTimes.txt"
 const val OUTPUT_PRIORITIES = "./priorities.txt"
 const val OUTPUT_STATS = "./statistics.txt"
 const val OUTPUT_FIELD_SEPARATOR = "\t"
+val QUANTILES = listOf(0.05,0.25,0.75,0.95)
 
 fun main(args: Array<String>) {
     val graphMlImporter = createGraphMLImporter()
@@ -61,7 +62,7 @@ fun main(args: Array<String>) {
         .sortedBy { it.priority }
         .toList()
 
-    val statsMap = marks.map { it to MeanVarianceAccumulator() }.toMap()
+    val statsMap = marks.map { it to MarkStatistics(NUM_SIMULATIONS, QUANTILES) }.toMap()
 
     File(OUTPUT_FINISH_TIMES).writer().use { writer ->
         writer.write(marks.joinToString(separator = OUTPUT_FIELD_SEPARATOR) { taskHeader(it) })
@@ -81,12 +82,12 @@ fun main(args: Array<String>) {
         println("...done ${Duration.between(begin, Instant.now())}")
     }
 
-    writeStatistics(marks.sortedBy { statsMap[it]?.average }, statsMap, workerSet)
+    writeStatistics(marks.sortedBy { statsMap[it]?.allSamplesMeanVar?.average }, statsMap, workerSet)
 }
 
 private fun writeStatistics(
     marks: List<MarkVertex>,
-    statsMap: Map<MarkVertex, MeanVarianceAccumulator>,
+    statsMap: Map<MarkVertex, MarkStatistics>,
     workerSet: Set<WorkerVertex>
 ) {
     File(OUTPUT_STATS).writer().use { writeStatisticsReport(it, marks, statsMap, workerSet) }
@@ -95,7 +96,7 @@ private fun writeStatistics(
 fun writeStatisticsReport(
     writer: Writer,
     marks: List<MarkVertex>,
-    statsMap: Map<MarkVertex, MeanVarianceAccumulator>,
+    statsMap: Map<MarkVertex, MarkStatistics>,
     workerSet: Set<WorkerVertex>
 ): Unit {
 
@@ -113,21 +114,30 @@ fun writeStatisticsReport(
 
 fun numberFmt(x: Double?) = "%.2f".format(Locale.ROOT, x)
 
-private fun writeMarkStatistics(writer: Writer, mark: MarkVertex, stats: MeanVarianceAccumulator?) : Unit {
+private fun writeMarkStatistics(writer: Writer, mark: MarkVertex, stats: MarkStatistics?) : Unit {
 
     writer.write("\n")
     writer.write(taskHeader(mark) + "\n")
 
     if (stats != null) {
-        val confInterval = stats.stdevSample / sqrt(1.0 * stats.n) * 3
-        val minimun = numberFmt(stats.average - confInterval)
-        val maximun = numberFmt(stats.average + confInterval)
+        writeAverageWithConfidenceInterval99_7(writer, "average", stats.allSamplesMeanVar)
 
-        writer.write("- average (99.7%): ${numberFmt(stats.average)} ($minimun; $maximun)\n")
-        writer.write("- stdev sample: ${numberFmt(stats.stdevSample)}\n")
+        val stdevSample = stats.allSamplesMeanVar.stdevSample
+        writer.write("- stdev sample: ${numberFmt(stdevSample)}\n")
+
+        for ((index, quantStat) in stats.quantilesMeanVarList.withIndex()) {
+            val quantStr = "%4.1f%%".format(stats.quantiles[index] * 100.0)
+            writeAverageWithConfidenceInterval99_7(writer, quantStr, quantStat)
+        }
     } else {
         writer.write("- NO STATS !!\n")
     }
+}
+
+fun writeAverageWithConfidenceInterval99_7(writer: Writer, statName: String, stats: MeanVarianceAccumulator) {
+    val (minimun, maximun) = stats.confidenceInterval99_7
+    val average = stats.average
+    writer.write("- ${statName} (99.7%): ${numberFmt(average)} (${numberFmt(minimun)}; ${numberFmt(maximun)})\n")
 }
 
 fun taskHeader(task: BaseTaskVertex) = "${task.id}:${task.taskId}:${task.name}"
@@ -164,6 +174,55 @@ class MeanVarianceAccumulator {
     val stdevPopulation get() = sqrt(variancePopulation)
 
     val stdevSample get() = sqrt(varianceSample)
+
+    val confidenceInterval99_7: Pair<Double, Double> get() {
+        val confInterval = stdevSample / sqrt(1.0 * n) * 3
+        val minimun = average - confInterval
+        val maximun = average + confInterval
+        return Pair(minimun, maximun)
+    }
+}
+
+class MarkStatistics(numTotalSamples: Int, quantiles: List<Double>) {
+    val allSamplesMeanVar = MeanVarianceAccumulator()
+    val quantiles: List<Double>
+    val quantilesMeanVarList: List<MeanVarianceAccumulator>
+    val percentileSubSample = PriorityQueue<Double>()
+    val subSampleSize: Int
+
+    init {
+        subSampleSize = floor(sqrt(numTotalSamples.toDouble())).roundToInt()
+        this.quantiles = quantiles.sorted()
+        quantilesMeanVarList = this.quantiles.map { MeanVarianceAccumulator() }
+    }
+
+    fun addNullableSample(x: Double?) {
+        if (x != null) addSample(x)
+    }
+
+    fun addSample(x: Double) : Unit {
+        allSamplesMeanVar.addSample(x)
+        percentileSubSample.add(x)
+        extractQuantiles()
+    }
+
+    private fun extractQuantiles(): Unit {
+        if (percentileSubSample.size < subSampleSize) {
+            return
+        }
+
+        var currentPos = 0
+        var currentValue: Double? = percentileSubSample.poll()
+        for ((index, quantile) in quantiles.withIndex()) {
+            val targetPos = floor(quantile * subSampleSize).roundToInt() - 1
+            while (targetPos > currentPos && currentPos < subSampleSize) {
+                currentValue = percentileSubSample.poll()
+                currentPos++
+            }
+            quantilesMeanVarList[index].addNullableSample(currentValue)
+        }
+        percentileSubSample.clear()
+    }
 }
 
 fun extractTasksSubGraph(graph: Graph<BaseVertex, DefaultEdge>): Graph<BaseTaskVertex, DefaultEdge> {
