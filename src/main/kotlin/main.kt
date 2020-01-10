@@ -300,6 +300,7 @@ fun extractWorkers(graph: Graph<BaseVertex, DefaultEdge>): Set<WorkerVertex> {
     return graph.vertexSet().asSequence()
         .map { it as? WorkerVertex }
         .filterNotNull()
+        .filter { it.dedication > 0.0 }
         .toSet()
 }
 
