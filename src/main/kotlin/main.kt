@@ -13,6 +13,7 @@ import java.lang.NumberFormatException
 import java.time.Duration
 import java.time.Instant
 import java.util.*
+import java.util.function.Function
 import kotlin.Comparator
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -308,6 +309,12 @@ data class Work(val worker: WorkerVertex, val finishTime: Double, val task: Task
 
 val finishTimeComparator: Comparator<Work> = Comparator.comparing<Work, Double> { it.finishTime }
 
+data class TodoItem(val task: TaskVertex, val order: Int)
+
+val todoItemComparator: Comparator<TodoItem> = Comparator.comparing(
+    Function<TodoItem, TaskVertex> { it.task }, taskPriorityComparator
+).thenBy { it.order }
+
 class WorkSimulator(
     val taskDependencyGraph: Graph<BaseTaskVertex, DefaultEdge>,
     val workerSet: Set<WorkerVertex>,
@@ -315,7 +322,7 @@ class WorkSimulator(
     val random: Random = Random.Default
 ) {
     val finishTimes = mutableMapOf<BaseTaskVertex, Double>()
-    private val todoQueue: Queue<TaskVertex> = PriorityQueue(taskPriorityComparator)
+    private val todoQueue: Queue<TodoItem> = PriorityQueue(todoItemComparator)
     private val workQueue: Queue<Work> = PriorityQueue(finishTimeComparator)
     private val idleQueue: Queue<WorkerVertex> = LinkedList()
     private val statusMap = mutableMapOf<BaseTaskVertex, TaskStatus>()
@@ -356,7 +363,8 @@ class WorkSimulator(
             var workTime = taskTimeDistribution(random.nextDouble())
 
             if (random.nextDouble() < worker.dedication) {
-                task = todoQueue.remove()
+                val todoItem = todoQueue.remove()
+                task = todoItem.task
                 workTime *= task.points
             }
 
@@ -388,13 +396,20 @@ class WorkSimulator(
             .forEach { dependent ->
                 when (dependent) {
                     is TaskVertex -> if (taskIsWorkable(dependent)) {
-                        todoQueue.add(dependent)
+                        addTaskToTodoQueue(dependent)
                     }
                     is MarkVertex -> if (taskDependenciesAreDone(dependent)) {
                         processFinishedTask(dependent)
                     }
                 }
             }
+    }
+
+    private fun addTaskToTodoQueue(task: TaskVertex) : Unit {
+        todoQueue.add(TodoItem(
+            task = task,
+            order = random.nextInt()
+        ))
     }
 
     private fun initStatusMap() {
@@ -420,7 +435,7 @@ class WorkSimulator(
         for (task in statusMap.keys) {
             if (taskIsWorkable(task)) {
                 if (task is TaskVertex) {
-                    todoQueue.add(task)
+                    addTaskToTodoQueue(task)
                 }
             }
         }
